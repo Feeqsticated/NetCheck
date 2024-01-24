@@ -1,0 +1,53 @@
+- name: Check Network Connectivity and Exfiltration Possibilities
+  hosts: all  # Target all hosts in the inventory
+  gather_facts: no  # Disable gathering facts to speed up execution
+  vars:
+    test_ips: ['8.8.8.8', '1.1.1.1']   # Define IPs to ping
+    test_urls: ['google.com', 'example.com']  # Define URLs to check DNS resolution
+    common_ports: [53, 80, 443, 22]  # Common ports to check (DNS, HTTP, HTTPS, SSH)
+    connectivity_results: []  # Initialize an empty list to store results
+
+  tasks:
+    - name: Test Ping to Defined IPs
+      command: "ping -c 3 {{ item }}"
+      loop: "{{ test_ips }}"
+      register: ping_results
+      ignore_errors: yes
+      # Ping each IP and store the result
+
+    - name: Test DNS Resolution for URLs
+      command: "dig +short {{ item }}"
+      loop: "{{ test_urls }}"
+      register: dns_results
+      ignore_errors: yes
+      # Use dig to check DNS resolution for each URL
+
+    - name: Test Common Ports
+      wait_for:
+        host: "{{ inventory_hostname }}"
+        port: "{{ item }}"
+        timeout: 10
+        state: started
+      loop: "{{ common_ports }}"
+      register: port_results
+      ignore_errors: yes
+      # Check if common ports are open on the host
+
+    - name: Aggregate Results
+      set_fact:
+        connectivity_results: "{{ connectivity_results + [item] }}"
+      loop: "{{ ping_results.results + dns_results.results + port_results.results }}"
+      # Combine all test results into a single list
+
+    - name: Write Results to File
+      copy:
+        dest: "/tmp/network_connectivity_results_{{ inventory_hostname }}.txt"
+        content: |
+          {% for result in connectivity_results %}
+          {% if result.cmd is defined %}
+          {{ inventory_hostname }} connection to {{ result.item }} {% if result.rc == 0 %}connected successfully{% else %}failed. Network might be blocked{% endif %}
+          {% endif %}
+          {% endfor %}
+      delegate_to: localhost
+      # Write the results to a file on the Ansible controller
+
