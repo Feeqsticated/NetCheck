@@ -1,0 +1,23 @@
+---
+- name: Test Network Connectivity
+  hosts: your_target_hosts
+  gather_facts: no
+  tasks:
+    - name: Ping IP Address
+      shell: "ping -c 3 -q {{ inventory_hostname }}"
+      register: ping_result
+      ignore_errors: yes
+
+    - name: Check DNS Resolution
+      shell: "dig +short google.com"
+      register: dig_result
+      ignore_errors: yes
+
+    - name: Write Results to File
+      blockinfile:
+        path: /tmp/network_test_results.txt
+        block: |
+          Host: {{ inventory_hostname }}
+          IP Ping Result: {{ 'Network connection successful' if ping_result.rc == 0 else 'Failed, Network connection blocked' }}
+          DNS Resolution Result: {{ 'Network connection successful' if dig_result.rc == 0 else 'Failed, Network connection blocked' }}
+      delegate_to: localhost
